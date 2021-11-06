@@ -17,6 +17,9 @@ $nfsen_config = array(
         ),
         'db' => 'RRD',
         'processor' => 'NfDump',
+        'importer' => 'Import',
+        //'processor' => 'FDSDump',
+        //'importer' => 'ImportFDS',
     ),
     'frontend' => array(
         'reload_interval' => 60,
@@ -34,6 +37,12 @@ $nfsen_config = array(
                 'order_by' => 'bytes',
             ),
         ),
+    ),
+    'fdsdump' => array(
+        'binary' => '/usr/bin/fdsdump',
+        'profiles-data' => '/data/fds/',
+        'profile' => 'live',
+        'max-processes' => 1, // maximum number of concurrently running nfdump processes
     ),
     'nfdump' => array(
         'binary' => '/usr/bin/nfdump',

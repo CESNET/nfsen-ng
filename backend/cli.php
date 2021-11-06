@@ -5,7 +5,7 @@ spl_autoload_register(function ($class) {
     include_once __DIR__ . DIRECTORY_SEPARATOR . str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
 });
 
-use nfsen_ng\common\{Debug, Config, Import};
+use nfsen_ng\common\{Debug, Config, Import, ImportFDS};
 
 $d = Debug::getInstance();
 try {
@@ -59,7 +59,9 @@ if ($argc < 2 || in_array($argv[1], array('--help', '-help', '-h', '-?'))) {
         $d->log('CLI: Starting import', LOG_INFO);
         $start = new DateTime();
         $start->setDate(date('Y') - 3, date('m'), date('d'));
-        $i = new Import();
+
+        $i = new Config::$importClass();
+
         if (in_array('-v', $argv)) $i->setVerbose(true);
         if (in_array('-p', $argv)) $i->setProcessPorts(true);
         if (in_array('-ps', $argv)) $i->setProcessPortsBySource(true);

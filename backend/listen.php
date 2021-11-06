@@ -10,7 +10,7 @@ spl_autoload_register(function ($class) {
     include_once __DIR__ . DIRECTORY_SEPARATOR . str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
 });
 
-use \nfsen_ng\common\{Debug, Config, Import};
+use \nfsen_ng\common\{Debug, Config, Import, ImportFDS};
 
 ini_set('display_errors', true);
 ini_set('error_reporting', E_ALL);
@@ -40,7 +40,9 @@ fwrite($lock_file, getmypid() . PHP_EOL);
 // first import missed data if available
 $start = new DateTime();
 $start->setDate(date('Y') - 3, date('m'), date('d'));
-$i = new Import();
+
+$i = new Config::$importClass();
+
 $i->setQuiet(false);
 $i->setVerbose(true);
 $i->setProcessPorts(true);

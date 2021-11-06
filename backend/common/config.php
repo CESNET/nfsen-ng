@@ -14,6 +14,12 @@ abstract class Config {
       * @var \nfsen_ng\processor\Processor
       */
     static $processorClass;
+
+    /**
+      * @var \nfsen_ng\processor\Processor
+      */
+    static $importClass;
+
     private static $initialized = false;
     
     private function __construct() {
@@ -46,6 +52,13 @@ abstract class Config {
         $proc_iface = 'nfsen_ng\\processor\\Processor';
         if (!in_array($proc_iface, class_implements(self::$processorClass)))
             throw new \Exception('Processor class ' . self::$processorClass . ' doesn\'t implement ' . $proc_iface . '.');
+
+        // find importer
+        $import_class = array_key_exists('importer', self::$cfg['general']) ? self::$cfg['general']['importer'] : 'Import';
+        self::$importClass = 'nfsen_ng\\common\\' . $import_class;
+        if (!class_exists(self::$importClass))
+            throw new \Exception('Failed loading class ' . self::$importClass . '. The class doesn\'t exist.');
+
     }
     
 }

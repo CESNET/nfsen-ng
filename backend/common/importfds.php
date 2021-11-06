@@ -2,9 +2,9 @@
 
 namespace nfsen_ng\common;
 
-use nfsen_ng\processor\NfDump;
+use nfsen_ng\processor\FDSDump;
 
-class Import {
+class ImportFDS {
 
     private $d;
     private $cli;
@@ -52,11 +52,11 @@ class Import {
 
         // process each source, e.g. gateway, mailserver, etc.
         foreach ($sources as $nr => $source) {
-            $source_path = Config::$cfg['nfdump']['profiles-data'] . DIRECTORY_SEPARATOR . Config::$cfg['nfdump']['profile'];
-            if (!file_exists($source_path)) throw new \Exception("Could not read nfdump profile directory " . $source_path);
+            //$source_path = Config::$cfg['fdsdump']['profiles-data'] . DIRECTORY_SEPARATOR . Config::$cfg['fdsdump']['profile'];
+            $source_path = Config::$cfg['fdsdump']['profiles-data'];
+            if (!file_exists($source_path)) throw new \Exception("Could not read fdsdump profile directory " . $source_path);
             if ($this->cli === true && $this->quiet === false)
                 echo PHP_EOL . "Processing source " . $source . " (" . ($nr + 1) . "/" . count($sources) . ")..." . PHP_EOL;
-
             $date = clone $datestart;
 
             // check if we want to continue a stopped import
@@ -108,7 +108,7 @@ class Import {
 
                     try {
                         // parse date of file name to compare against last_update
-                        preg_match('/nfcapd\.([0-9]{12})$/', $file, $file_date);
+                        preg_match('/flows\.([0-9]{14})\.fds$/', $file, $file_date);
                         if (count($file_date) !== 2) throw new \LengthException('Bad file name format of nfcapd file: ' . $file);
                         $file_datetime = new \DateTime($file_date[1]);
                     } catch (\LengthException $e) {
@@ -119,7 +119,7 @@ class Import {
                     // compare file name date with last update
                     if ($file_datetime <= $last_update) continue;
 
-                    // let nfdump parse each nfcapd file
+                    // let fdsdump parse each nfcapd file
                     $stats_path = implode(DIRECTORY_SEPARATOR, array_slice($scan, 2, 5)) . DIRECTORY_SEPARATOR . $file;
 
                     try {
@@ -149,31 +149,26 @@ class Import {
 
     }
 
-	/**
-	 * @param $source
-	 * @param $stats_path
-	 * @return bool
-	 * @throws \Exception
-	 */
     private function write_source_data($source, $stats_path) {
 
         // set options and get netflow summary statistics (-I)
-        $nfdump = NfDump::getInstance();
-        $nfdump->reset();
-        $nfdump->setOption("-I", null);
-        $nfdump->setOption("-M", $source);
-        $nfdump->setOption("-r", $stats_path);
+        $fdsdump = FDSDump::getInstance();
+        $fdsdump->reset();
+        $fdsdump->setOption("-I", null);
+        $fdsdump->setOption("-M", $source);
+        $fdsdump->setOption("-r", $stats_path);
+        $fdsdump->setOption("-o", "json");
 
         if ($this->db_updateable($stats_path, $source) === false) return false;
 
         try {
-            $input = $nfdump->execute();
+            $input = $fdsdump->execute();
         } catch (\Exception $e) {
             $this->d->log('Exception: ' . $e->getMessage(), LOG_WARNING);
             return false;
         }
 
-        $date = new \DateTime(substr($stats_path, -12));
+        $date = new \DateTime(substr($stats_path, -18, 12));
         $data = array(
             'fields' => array(),
             'source' => $source,
@@ -183,15 +178,19 @@ class Import {
         );
         // $input data is an array of lines looking like this:
         // flows_tcp: 323829
-        foreach ($input as $i => $line) {
-            if (!is_string($line)) $this->d->log('Got no output of previous command', LOG_DEBUG);
-            if ($i === 0) continue; // skip nfdump command
+        foreach ($input as $line) {
+            if (!is_string($line)) $this->d->log('Got no output of previous command '. $line, LOG_DEBUG);
+            //if ($i === 0) continue; // skip nfdump command
             if (!preg_match('/:/', $line)) continue; // skip invalid lines like error messages
             list($type, $value) = explode(": ", $line);
 
             // we only need flows/packets/bytes values, the source and the timestamp
             if (preg_match("/^(flows|packets|bytes)/i", $type)) {
                 $data['fields'][strtolower($type)] = (int)$value;
+            }
+            // skip empty - probably non-closed FDS file
+            if ($type === "First" && (int)$value === 18446744073709551) {
+                return false;
             }
         }
 
@@ -228,24 +227,25 @@ class Import {
         $sources = Config::$cfg['general']['sources'];
 
         // set options and get netflow statistics
-        $nfdump = NfDump::getInstance();
-        $nfdump->reset();
+        $fdsdump = FDSDump::getInstance();
+        $fdsdump->reset();
 
         if (empty($source)) {
             // if no source is specified, get data for all sources
-            $nfdump->setOption("-M", implode(":", $sources));
+            $fdsdump->setOption("-M", implode(":", $sources));
             if ($this->db_updateable($stats_path, '', $port) === false) return false;
         } else {
-            $nfdump->setOption("-M", $source);
+            $fdsdump->setOption("-M", $source);
             if ($this->db_updateable($stats_path, $source, $port) === false) return false;
         }
 
-        $nfdump->setFilter("dst port=" . $port);
-        $nfdump->setOption("-s", "dstport:p");
-        $nfdump->setOption("-r", $stats_path);
+        $fdsdump->setFilter("dst port " . $port);
+        $fdsdump->setOption("-a", "dstport");
+        $fdsdump->setOption("-r", $stats_path);
+        $fdsdump->setOption("-o", "csv");
 
         try {
-            $input = $nfdump->execute();
+            $input = $fdsdump->execute();
         } catch (\Exception $e) {
             $this->d->log('Exception: ' . $e->getMessage(), LOG_WARNING);
             return false;
@@ -253,7 +253,8 @@ class Import {
 
         // parse and turn into usable data
 
-        $date = new \DateTime(substr($stats_path, -12));
+        //$date = new \DateTime(substr($stats_path, -12));
+        $date = new \DateTime(substr($stats_path, -18, 12));
         $data = [
             'fields' => [
                 'flows' => 0,
@@ -334,7 +335,7 @@ class Import {
 
         // parse capture file's datetime. can't use filemtime as we need the datetime in the file name.
         $date = array();
-        if (!preg_match('/nfcapd\.([0-9]{12})$/', $file, $date)) return false; // nothing to import
+        if (!preg_match('/flows\.([0-9]{14}).fds$/', $file, $date)) return false; // nothing to import
 
         $file_datetime = new \DateTime($date[1]);
 
@@ -393,4 +394,5 @@ class Import {
         $this->checkLastUpdate = $checkLastUpdate;
     }
 }
+
 
