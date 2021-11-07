@@ -75,7 +75,7 @@ class FDSDump implements Processor {
                 }
                 break;
             case '-r':
-                $this->cfg['env']['flowdirs'] = $value;
+                $this->cfg['env']['flowdirs'] = array($value);
                 break;
             case '-O':
                 $this->cfg['option']["-O"] = ($value == "tstart" ? "flowStartMicroseconds:min" : $value);
